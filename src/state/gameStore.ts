@@ -26,6 +26,9 @@ export interface GameState {
   /** Results of completed dailies, keyed by date. */
   dailyResults: Record<string, DailyResult>;
 
+  /** Whether the first-time "How to Play" intro has been shown. */
+  seenHowTo: boolean;
+
   addCoins: (n: number) => void;
   /** Spend coins if affordable. Returns true on success. */
   spendCoins: (n: number) => boolean;
@@ -39,6 +42,7 @@ export interface GameState {
     reward: number,
   ) => void;
   setSound: (on: boolean) => void;
+  markHowToSeen: () => void;
   hardReset: () => void;
 }
 
@@ -52,6 +56,7 @@ export const useGameStore = create<GameState>()(
       dailyStreak: 0,
       lastDailyDate: null,
       dailyResults: {},
+      seenHowTo: false,
 
       addCoins: (n) => set((s) => ({ coins: s.coins + n })),
 
@@ -86,6 +91,8 @@ export const useGameStore = create<GameState>()(
 
       setSound: (on) => set({ soundOn: on }),
 
+      markHowToSeen: () => set({ seenHowTo: true }),
+
       hardReset: () =>
         set({
           coins: STARTING_COINS,
@@ -95,6 +102,7 @@ export const useGameStore = create<GameState>()(
           dailyStreak: 0,
           lastDailyDate: null,
           dailyResults: {},
+          seenHowTo: true, // don't replay the intro after a reset
         }),
     }),
     {
@@ -108,6 +116,7 @@ export const useGameStore = create<GameState>()(
         dailyStreak: s.dailyStreak,
         lastDailyDate: s.lastDailyDate,
         dailyResults: s.dailyResults,
+        seenHowTo: s.seenHowTo,
       }),
     },
   ),

@@ -17,6 +17,7 @@ import HintBar from '../components/HintBar';
 import BonusJar from '../components/BonusJar';
 import Toast, { type ToastData } from '../components/Toast';
 import LevelCompleteModal from '../components/LevelCompleteModal';
+import HowToPlay from '../components/HowToPlay';
 
 interface Props {
   level: RawLevel;
@@ -64,6 +65,10 @@ export default function PlayScreen({
   const play = usePlayLevel(level);
   const recordLevelResult = useGameStore((s) => s.recordLevelResult);
   const recordDailyResult = useGameStore((s) => s.recordDailyResult);
+  const markHowToSeen = useGameStore((s) => s.markHowToSeen);
+  const [showHowTo, setShowHowTo] = useState(
+    mode === 'campaign' && !useGameStore.getState().seenHowTo,
+  );
 
   const [tiles, setTiles] = useState<Tile[]>(() => makeTiles(level.letters));
   const [preview, setPreview] = useState('');
@@ -247,6 +252,15 @@ export default function PlayScreen({
       </div>
 
       <Toast toast={toast} />
+
+      {showHowTo && (
+        <HowToPlay
+          onClose={() => {
+            setShowHowTo(false);
+            markHowToSeen();
+          }}
+        />
+      )}
 
       {complete && (
         <LevelCompleteModal
