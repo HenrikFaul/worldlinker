@@ -90,14 +90,39 @@ scripts/           # build-time level generator + common-words list
 - **Grid words per level** `W(n) = min(8, 3 + ⌊n/12⌋)` *(the spec's `3 + ⌊n/5⌋`
   reaches 33 words by level 150 — capped here for a playable grid)*
 
+## Cloud sync (optional)
+
+The game is **local-first** — it’s fully playable with no backend. When Supabase
+env vars are present it additionally syncs your save and powers the Daily Word
+leaderboard. supabase-js is dynamically imported, so this costs nothing for
+offline builds.
+
+```bash
+cp .env.example .env.local   # then fill in your project URL + publishable key
+```
+
+| Var | Where |
+|-----|-------|
+| `VITE_SUPABASE_URL` | Supabase → Settings → API |
+| `VITE_SUPABASE_ANON_KEY` | the publishable / anon key (safe in client builds) |
+
+**Schema layout.** All tables live in a dedicated **`word_linker`** schema (see
+`supabase/migrations/`). The client never touches tables directly — it calls a
+small set of `wl_*` `SECURITY DEFINER` functions in `public`
+(`wl_load_state`, `wl_save_state`, `wl_submit_daily`, `wl_leaderboard`). This
+keeps Word Linker cleanly separable when co-located with other apps in one
+project, and works without exposing a custom schema to PostgREST.
+
+**Auth.** Cloud save uses **anonymous sign-in**, so enable
+*Authentication → Sign-in → Anonymous sign-ins* on the project. No row is created
+until the player actually plays; saves are reconciled with a max-merge so
+progress is never lost across devices.
+
 ## Roadmap
 
-The design targets a Lovable Cloud / Supabase backend; this MVP lays the
-groundwork for it. Next up:
-
-- Supabase auth + cloud save, **Daily Word** puzzle, and leaderboards
-- Theme packs (Animals, Foods, Countries…), IAP & rewarded‑ad hooks
-- AI‑generated level pipeline and 8‑language dictionaries
+- Theme packs (Animals, Foods, Countries…), IAP & rewarded-ad hooks
+- AI-generated level pipeline and 8-language dictionaries
+- Server-validated Daily Word + global tournaments
 - Capacitor wrapper for Android/iOS
 
 ---

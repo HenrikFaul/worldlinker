@@ -1,34 +1,29 @@
--- Word Linker — initial schema: profiles, cloud save, daily results + leaderboard.
--- Designed for local-first play with an optional cloud layer (anonymous auth ok).
+-- Word Linker — co-located in the GeoData Supabase project under a dedicated
+-- schema. This is the exact migration applied to that project.
+--
+-- All TABLES live in word_linker.*. Because `public` is the only
+-- PostgREST-exposed schema on that project, the client API surface is a set of
+-- wl_*-prefixed SECURITY DEFINER functions in `public` (the only Word Linker
+-- objects outside the dedicated schema). No GeoData object is modified.
+--
+-- For a dedicated project you could instead expose the `word_linker` schema
+-- (Settings → API → Exposed schemas) and use the JS client's `db.schema`
+-- option for direct table access.
 
--- ---------------------------------------------------------------------------
--- profiles
--- ---------------------------------------------------------------------------
-create table if not exists public.profiles (
+create schema if not exists word_linker;
+grant usage on schema word_linker to anon, authenticated, service_role;
+
+-- ---- tables (RLS on, no policies: direct REST access denied; reached only via
+--      the SECURITY DEFINER functions below) ------------------------------
+create table if not exists word_linker.profiles (
   user_id uuid primary key references auth.users (id) on delete cascade,
   display_name text not null default 'Word Lover',
   country_code text,
   created_at timestamptz not null default now()
 );
+alter table word_linker.profiles enable row level security;
 
-alter table public.profiles enable row level security;
-
-drop policy if exists "profiles self" on public.profiles;
-create policy "profiles self" on public.profiles
-  for all to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
--- display names are public so leaderboards can show them
-drop policy if exists "profiles public read" on public.profiles;
-create policy "profiles public read" on public.profiles
-  for select to anon, authenticated
-  using (true);
-
--- ---------------------------------------------------------------------------
--- game_state — one cloud-save row per user
--- ---------------------------------------------------------------------------
-create table if not exists public.game_state (
+create table if not exists word_linker.game_state (
   user_id uuid primary key references auth.users (id) on delete cascade,
   coins int not null default 0,
   max_level int not null default 1,
@@ -37,19 +32,9 @@ create table if not exists public.game_state (
   last_daily_date date,
   updated_at timestamptz not null default now()
 );
+alter table word_linker.game_state enable row level security;
 
-alter table public.game_state enable row level security;
-
-drop policy if exists "game_state self" on public.game_state;
-create policy "game_state self" on public.game_state
-  for all to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
--- ---------------------------------------------------------------------------
--- daily_results — one result per user per day (feeds the leaderboard)
--- ---------------------------------------------------------------------------
-create table if not exists public.daily_results (
+create table if not exists word_linker.daily_results (
   user_id uuid not null references auth.users (id) on delete cascade,
   date date not null,
   stars int not null default 0,
@@ -60,76 +45,87 @@ create table if not exists public.daily_results (
   created_at timestamptz not null default now(),
   primary key (user_id, date)
 );
+alter table word_linker.daily_results enable row level security;
+create index if not exists wl_daily_results_date_idx on word_linker.daily_results (date);
 
-alter table public.daily_results enable row level security;
+-- ---- API: wl_* functions in public (auth.uid() identifies the caller) ------
+create or replace function public.wl_load_state()
+returns jsonb
+language sql stable security definer set search_path = word_linker, public
+as $$
+  select to_jsonb(g) from word_linker.game_state g where g.user_id = auth.uid();
+$$;
 
-drop policy if exists "daily_results self" on public.daily_results;
-create policy "daily_results self" on public.daily_results
-  for all to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
-create index if not exists daily_results_date_idx on public.daily_results (date);
-
--- ---------------------------------------------------------------------------
--- table privileges (RLS still restricts which *rows* each user can touch)
--- ---------------------------------------------------------------------------
-grant select on public.profiles to anon;
-grant select, insert, update, delete on public.profiles to authenticated;
-grant select, insert, update, delete on public.game_state to authenticated;
-grant select, insert, update, delete on public.daily_results to authenticated;
-
--- ---------------------------------------------------------------------------
--- auto-provision profile + game_state for every new auth user
--- ---------------------------------------------------------------------------
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
+create or replace function public.wl_save_state(
+  p_coins int, p_max_level int, p_level_stars jsonb, p_daily_streak int, p_last_daily_date date
+) returns void
+language plpgsql security definer set search_path = word_linker, public
 as $$
 begin
-  insert into public.profiles (user_id) values (new.id) on conflict do nothing;
-  insert into public.game_state (user_id) values (new.id) on conflict do nothing;
-  return new;
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  insert into word_linker.profiles (user_id) values (auth.uid()) on conflict do nothing;
+  insert into word_linker.game_state (user_id, coins, max_level, level_stars, daily_streak, last_daily_date, updated_at)
+  values (auth.uid(), coalesce(p_coins,0), coalesce(p_max_level,1), coalesce(p_level_stars,'{}'::jsonb), coalesce(p_daily_streak,0), p_last_daily_date, now())
+  on conflict (user_id) do update set
+    coins = excluded.coins, max_level = excluded.max_level, level_stars = excluded.level_stars,
+    daily_streak = excluded.daily_streak, last_daily_date = excluded.last_daily_date, updated_at = now();
 end;
 $$;
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
-
--- ---------------------------------------------------------------------------
--- leaderboard read path (security definer so it can join profiles + rank
--- without exposing every result row directly)
--- ---------------------------------------------------------------------------
-create or replace function public.daily_leaderboard(p_date date, p_limit int default 50)
-returns table (
-  display_name text,
-  stars int,
-  found int,
-  bonus int,
-  time_ms int,
-  rank bigint
-)
-language sql
-stable
-security definer
-set search_path = public
+create or replace function public.wl_submit_daily(
+  p_date date, p_stars int, p_found int, p_total int, p_bonus int, p_time_ms int default 0
+) returns jsonb
+language plpgsql security definer set search_path = word_linker, public
 as $$
-  select
-    pr.display_name,
-    dr.stars,
-    dr.found,
-    dr.bonus,
-    dr.time_ms,
-    rank() over (order by dr.stars desc, dr.bonus desc, dr.time_ms asc) as rank
-  from public.daily_results dr
-  join public.profiles pr on pr.user_id = dr.user_id
-  where dr.date = p_date
-  order by rank
-  limit greatest(1, least(p_limit, 200));
+declare v_uid uuid := auth.uid(); v_last date; v_streak int; v_rank int;
+begin
+  if v_uid is null then raise exception 'not authenticated'; end if;
+  insert into word_linker.profiles (user_id) values (v_uid) on conflict do nothing;
+  insert into word_linker.daily_results (user_id, date, stars, found, total, bonus, time_ms)
+  values (v_uid, p_date, greatest(0, least(3, coalesce(p_stars,0))), greatest(0, coalesce(p_found,0)),
+          greatest(0, coalesce(p_total,0)), greatest(0, coalesce(p_bonus,0)), greatest(0, coalesce(p_time_ms,0)))
+  on conflict (user_id, date) do update set
+    stars = excluded.stars, found = excluded.found, total = excluded.total,
+    bonus = excluded.bonus, time_ms = excluded.time_ms;
+
+  select last_daily_date, daily_streak into v_last, v_streak from word_linker.game_state where user_id = v_uid;
+  if v_last = p_date then v_streak := coalesce(v_streak, 1);
+  elsif v_last = (p_date - 1) then v_streak := coalesce(v_streak, 0) + 1;
+  else v_streak := 1; end if;
+
+  insert into word_linker.game_state (user_id, daily_streak, last_daily_date, updated_at)
+  values (v_uid, v_streak, p_date, now())
+  on conflict (user_id) do update set daily_streak = v_streak, last_daily_date = p_date, updated_at = now();
+
+  select count(*) + 1 into v_rank from word_linker.daily_results d
+   where d.date = p_date and (d.stars > p_stars or (d.stars = p_stars and d.bonus > p_bonus));
+  return jsonb_build_object('streak', v_streak, 'rank', v_rank);
+end;
 $$;
 
-grant execute on function public.daily_leaderboard(date, int) to anon, authenticated;
+create or replace function public.wl_leaderboard(p_date date, p_limit int default 50)
+returns table (display_name text, stars int, found int, bonus int, time_ms int, rank bigint)
+language sql stable security definer set search_path = word_linker, public
+as $$
+  select pr.display_name, dr.stars, dr.found, dr.bonus, dr.time_ms,
+    rank() over (order by dr.stars desc, dr.bonus desc, dr.time_ms asc) as rank
+  from word_linker.daily_results dr
+  join word_linker.profiles pr on pr.user_id = dr.user_id
+  where dr.date = p_date
+  order by rank
+  limit greatest(1, least(coalesce(p_limit, 50), 200));
+$$;
+
+-- least privilege: leaderboard is anon-readable; the rest require a signed-in
+-- (incl. anonymous-auth) user, whose role is `authenticated`.
+revoke all on function public.wl_load_state() from public;
+revoke all on function public.wl_save_state(int, int, jsonb, int, date) from public;
+revoke all on function public.wl_submit_daily(date, int, int, int, int, int) from public;
+revoke all on function public.wl_leaderboard(date, int) from public;
+revoke execute on function public.wl_load_state() from anon;
+revoke execute on function public.wl_save_state(int, int, jsonb, int, date) from anon;
+revoke execute on function public.wl_submit_daily(date, int, int, int, int, int) from anon;
+grant execute on function public.wl_load_state() to authenticated;
+grant execute on function public.wl_save_state(int, int, jsonb, int, date) to authenticated;
+grant execute on function public.wl_submit_daily(date, int, int, int, int, int) to authenticated;
+grant execute on function public.wl_leaderboard(date, int) to anon, authenticated;

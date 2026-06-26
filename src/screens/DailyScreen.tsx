@@ -3,7 +3,7 @@ import { useGameStore } from '../state/gameStore';
 import { dateKeyOf, friendlyDate, getDailyInfo, type DailyInfo } from '../engine/daily';
 import { buildDailyShare, shareText } from '../lib/share';
 import { fetchLeaderboard, type LeaderboardRow } from '../state/cloudSync';
-import { isCloudEnabled } from '../lib/supabase';
+import { isCloudConfigured } from '../lib/supabase';
 import { sfx } from '../engine/audio';
 import Toast, { type ToastData } from '../components/Toast';
 
@@ -31,7 +31,7 @@ export default function DailyScreen({ onPlay, onBack }: Props) {
     getDailyInfo(new Date())
       .then((i) => alive && setInfo(i))
       .catch(() => alive && setLoadFailed(true));
-    if (isCloudEnabled()) {
+    if (isCloudConfigured()) {
       fetchLeaderboard(todayKey).then((rows) => alive && setBoard(rows));
     }
     return () => {
