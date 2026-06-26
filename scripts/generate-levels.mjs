@@ -16,6 +16,8 @@ const ROOT = join(__dirname, '..');
 
 // ---- config ---------------------------------------------------------------
 const LEVEL_COUNT = 150;
+const DAILY_COUNT = 366; // a full year of daily puzzles, cycled by date in-app
+const DAILY_NEED = 6; // main words per daily puzzle
 const SEED = 0x5eed1234;
 const MAX_BONUS = 50; // cap stored bonus words per level to bound file size
 
@@ -139,12 +141,12 @@ function nextBaseCandidate(len) {
   return null;
 }
 
-for (let n = 1; n <= LEVEL_COUNT; n++) {
-  const need = mainWordsForLevel(n);
+// Build one puzzle of `need` main words, preferring a base of `targetLen`
+// letters and falling back to slightly longer bases when needed. Returns a
+// puzzle object (no id) or null if the candidate pool is exhausted.
+function buildPuzzle(targetLen, need) {
   let built = null;
-
-  // try the spec length first, then fall back to longer bases (more words available)
-  for (const len of [lettersForLevel(n), lettersForLevel(n) + 1, lettersForLevel(n) + 2]) {
+  for (const len of [targetLen, targetLen + 1, targetLen + 2]) {
     if (len > 8) continue;
     const startCursor = candidateCursor.get(len) || 0;
     let tries = 0;
@@ -161,16 +163,13 @@ for (let n = 1; n <= LEVEL_COUNT; n++) {
         .filter((w) => !mainSet.has(w))
         .sort((a, b) => b.length - a.length || rankOf(a) - rankOf(b))
         .slice(0, MAX_BONUS);
-      built = { base, formable, mains, bonus };
+      built = { base, mains, bonus };
       break;
     }
     if (built) break;
     candidateCursor.set(len, startCursor); // reset so fallback length can reuse pool
   }
-
-  if (!built) {
-    throw new Error(`Could not build level ${n} (need ${need} main words)`);
-  }
+  if (!built) return null;
 
   recentlyUsed.push(built.base);
   if (recentlyUsed.length > RECENT_WINDOW) recentlyUsed.shift();
@@ -181,26 +180,38 @@ for (let n = 1; n <= LEVEL_COUNT; n++) {
   while (letters === built.base && guard++ < 10) letters = shuffle([...built.base]).join('');
 
   const mainWords = built.mains.sort((a, b) => a.length - b.length || a.localeCompare(b));
-
-  levels.push({
-    id: n,
+  return {
     base: built.base,
     letters: letters.toUpperCase(),
     mainWords: mainWords.map((w) => w.toUpperCase()),
     bonusWords: built.bonus.map((w) => w.toUpperCase()),
-  });
+  };
+}
+
+// campaign levels
+for (let n = 1; n <= LEVEL_COUNT; n++) {
+  const p = buildPuzzle(lettersForLevel(n), mainWordsForLevel(n));
+  if (!p) throw new Error(`Could not build level ${n}`);
+  levels.push({ id: n, ...p });
+}
+
+// daily-word pool: a year of meaty 6/7-letter puzzles, mapped by date in-app.
+const daily = [];
+for (let i = 0; i < DAILY_COUNT; i++) {
+  const p = buildPuzzle(i % 2 === 0 ? 6 : 7, DAILY_NEED);
+  if (!p) throw new Error(`Could not build daily puzzle ${i}`);
+  daily.push({ id: i, ...p });
 }
 
 // ---- write ----------------------------------------------------------------
-const outPath = join(ROOT, 'src/data/levels.json');
-writeFileSync(outPath, JSON.stringify(levels));
-const sizeKb = (Buffer.byteLength(JSON.stringify(levels)) / 1024).toFixed(1);
+writeFileSync(join(ROOT, 'src/data/levels.json'), JSON.stringify(levels));
+writeFileSync(join(ROOT, 'src/data/daily.json'), JSON.stringify(daily));
+const kb = (o) => (Buffer.byteLength(JSON.stringify(o)) / 1024).toFixed(1);
+const avg = (arr, f) => (arr.reduce((s, l) => s + f(l), 0) / arr.length).toFixed(1);
 
-// quick stats
-const avgMain = (levels.reduce((s, l) => s + l.mainWords.length, 0) / levels.length).toFixed(1);
-const avgBonus = (levels.reduce((s, l) => s + l.bonusWords.length, 0) / levels.length).toFixed(1);
-console.log(`\nGenerated ${levels.length} levels -> src/data/levels.json (${sizeKb} KB)`);
-console.log(`avg main words: ${avgMain}, avg bonus words: ${avgBonus}`);
+console.log(`\nGenerated ${levels.length} levels -> src/data/levels.json (${kb(levels)} KB)`);
+console.log(`avg main: ${avg(levels, (l) => l.mainWords.length)}, avg bonus: ${avg(levels, (l) => l.bonusWords.length)}`);
+console.log(`Generated ${daily.length} daily puzzles -> src/data/daily.json (${kb(daily)} KB)`);
 console.log('sample level 1:', JSON.stringify(levels[0]));
-console.log('sample level 60:', JSON.stringify(levels[59]));
 console.log('sample level 150:', JSON.stringify(levels[149]));
+console.log('sample daily 0:', JSON.stringify(daily[0]));

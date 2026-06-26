@@ -7,10 +7,11 @@ import Toast, { type ToastData } from '../components/Toast';
 
 interface Props {
   onPlay: () => void;
+  onDaily: () => void;
   onOpenSettings: () => void;
 }
 
-export default function MainMenu({ onPlay, onOpenSettings }: Props) {
+export default function MainMenu({ onPlay, onDaily, onOpenSettings }: Props) {
   const coins = useGameStore((s) => s.coins);
   const maxLevel = useGameStore((s) => s.maxLevel);
   const totalStars = useGameStore(selectTotalStars);
@@ -64,7 +65,14 @@ export default function MainMenu({ onPlay, onOpenSettings }: Props) {
           {started ? `Continue · Level ${maxLevel}` : 'Play'}
         </button>
         <div className="menu__row">
-          <button className="btn btn--ghost" onClick={() => comingSoon('Daily Word')}>
+          <button
+            className="btn btn--accent"
+            onClick={() => {
+              sfx.unlock();
+              sfx.tap();
+              onDaily();
+            }}
+          >
             Daily
           </button>
           <button className="btn btn--ghost" onClick={() => comingSoon('Themes')}>

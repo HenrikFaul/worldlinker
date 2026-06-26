@@ -4,7 +4,10 @@ interface Props {
   stars: number;
   coins: number;
   bonusFound: number;
+  mode: 'campaign' | 'daily';
+  streak?: number;
   isLastLevel: boolean;
+  onShare?: () => void;
   onNext: () => void;
   onMenu: () => void;
 }
@@ -13,10 +16,14 @@ export default function LevelCompleteModal({
   stars,
   coins,
   bonusFound,
+  mode,
+  streak,
   isLastLevel,
+  onShare,
   onNext,
   onMenu,
 }: Props) {
+  const isDaily = mode === 'daily';
   return (
     <div className="overlay">
       <motion.div
@@ -39,8 +46,10 @@ export default function LevelCompleteModal({
           ))}
         </div>
 
-        <h2 className="modal__title">Well done!</h2>
-        <p className="modal__sub">You found every word.</p>
+        <h2 className="modal__title">{isDaily ? 'Daily complete!' : 'Well done!'}</h2>
+        <p className="modal__sub">
+          {isDaily && streak ? `🔥 ${streak}-day streak` : 'You found every word.'}
+        </p>
 
         <div className="reward">
           <span className="coin-dot" />+{coins}
@@ -52,18 +61,29 @@ export default function LevelCompleteModal({
         </p>
 
         <div className="modal__actions">
-          {isLastLevel ? (
+          {isDaily ? (
+            <>
+              <button className="btn btn--primary btn--lg btn--block" onClick={onShare}>
+                Share result
+              </button>
+              <button className="btn btn--ghost btn--block" onClick={onMenu}>
+                Done
+              </button>
+            </>
+          ) : isLastLevel ? (
             <button className="btn btn--primary btn--lg btn--block" onClick={onMenu}>
               You finished every level! 🎉
             </button>
           ) : (
-            <button className="btn btn--primary btn--lg btn--block" onClick={onNext}>
-              Next Level
-            </button>
+            <>
+              <button className="btn btn--primary btn--lg btn--block" onClick={onNext}>
+                Next Level
+              </button>
+              <button className="btn btn--ghost btn--block" onClick={onMenu}>
+                Level Map
+              </button>
+            </>
           )}
-          <button className="btn btn--ghost btn--block" onClick={onMenu}>
-            Level Map
-          </button>
         </div>
       </motion.div>
     </div>

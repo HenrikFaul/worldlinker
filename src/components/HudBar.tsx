@@ -1,12 +1,13 @@
 import { useGameStore } from '../state/gameStore';
 
 interface Props {
-  level: number;
+  subtitle: string;
+  title: string;
   onBack: () => void;
   onSettings: () => void;
 }
 
-export default function HudBar({ level, onBack, onSettings }: Props) {
+export default function HudBar({ subtitle, title, onBack, onSettings }: Props) {
   const coins = useGameStore((s) => s.coins);
   return (
     <div className="hud">
@@ -16,8 +17,8 @@ export default function HudBar({ level, onBack, onSettings }: Props) {
         </svg>
       </button>
       <div className="hud__title">
-        <span className="hud__sub">Level</span>
-        <span className="hud__level">{level}</span>
+        <span className="hud__sub">{subtitle}</span>
+        <span className="hud__level">{title}</span>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <span className="chip">
