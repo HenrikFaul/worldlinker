@@ -72,6 +72,14 @@ create policy "daily_results self" on public.daily_results
 create index if not exists daily_results_date_idx on public.daily_results (date);
 
 -- ---------------------------------------------------------------------------
+-- table privileges (RLS still restricts which *rows* each user can touch)
+-- ---------------------------------------------------------------------------
+grant select on public.profiles to anon;
+grant select, insert, update, delete on public.profiles to authenticated;
+grant select, insert, update, delete on public.game_state to authenticated;
+grant select, insert, update, delete on public.daily_results to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- auto-provision profile + game_state for every new auth user
 -- ---------------------------------------------------------------------------
 create or replace function public.handle_new_user()
