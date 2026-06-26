@@ -8,10 +8,11 @@ import Toast, { type ToastData } from '../components/Toast';
 interface Props {
   onPlay: () => void;
   onDaily: () => void;
+  onOpenStats: () => void;
   onOpenSettings: () => void;
 }
 
-export default function MainMenu({ onPlay, onDaily, onOpenSettings }: Props) {
+export default function MainMenu({ onPlay, onDaily, onOpenStats, onOpenSettings }: Props) {
   const coins = useGameStore((s) => s.coins);
   const maxLevel = useGameStore((s) => s.maxLevel);
   const totalStars = useGameStore(selectTotalStars);
@@ -28,6 +29,11 @@ export default function MainMenu({ onPlay, onDaily, onOpenSettings }: Props) {
   return (
     <div className="menu">
       <div className="menu__top">
+        <button className="icon-btn" onClick={onOpenStats} aria-label="Your stats">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          </svg>
+        </button>
         <button className="icon-btn" onClick={onOpenSettings} aria-label="Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="2" />

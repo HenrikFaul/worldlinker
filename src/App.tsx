@@ -7,10 +7,11 @@ import { sfx } from './engine/audio';
 import MainMenu from './screens/MainMenu';
 import LevelSelect from './screens/LevelSelect';
 import DailyScreen from './screens/DailyScreen';
+import StatsScreen from './screens/StatsScreen';
 import PlayScreen from './screens/PlayScreen';
 import SettingsModal from './components/SettingsModal';
 
-type Screen = 'menu' | 'select' | 'daily' | 'play';
+type Screen = 'menu' | 'select' | 'daily' | 'stats' | 'play';
 
 export default function App() {
   const soundOn = useGameStore((s) => s.soundOn);
@@ -80,6 +81,7 @@ export default function App() {
         <MainMenu
           onPlay={() => setScreen('select')}
           onDaily={() => setScreen('daily')}
+          onOpenStats={() => setScreen('stats')}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
@@ -87,6 +89,8 @@ export default function App() {
       {screen === 'select' && <LevelSelect onPick={pickLevel} onBack={() => setScreen('menu')} />}
 
       {screen === 'daily' && <DailyScreen onPlay={startDaily} onBack={() => setScreen('menu')} />}
+
+      {screen === 'stats' && <StatsScreen onBack={() => setScreen('menu')} />}
 
       {screen === 'play' && renderPlay()}
 
