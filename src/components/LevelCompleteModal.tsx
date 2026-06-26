@@ -62,7 +62,7 @@ export default function LevelCompleteModal({
             </button>
           )}
           <button className="btn btn--ghost btn--block" onClick={onMenu}>
-            Menu
+            Level Map
           </button>
         </div>
       </motion.div>
