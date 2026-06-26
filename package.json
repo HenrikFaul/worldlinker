@@ -1,0 +1,30 @@
+{
+  "name": "word-linker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Word Linker — Connect Letters. Find Words. A cozy swipe-to-connect word puzzle.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "gen:levels": "node scripts/generate-levels.mjs",
+    "gen": "npm run gen:levels",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
+    "framer-motion": "^11.18.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "an-array-of-english-words": "^2.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11"
+  }
+}
