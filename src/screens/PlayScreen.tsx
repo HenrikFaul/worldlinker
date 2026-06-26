@@ -7,6 +7,7 @@ import {
 } from '../engine/levels';
 import { dailyReward } from '../engine/daily';
 import { useGameStore } from '../state/gameStore';
+import { submitDailyResult } from '../state/cloudSync';
 import { usePlayLevel } from '../state/usePlayLevel';
 import { sfx } from '../engine/audio';
 import { buildDailyShare, shareText } from '../lib/share';
@@ -112,6 +113,8 @@ export default function PlayScreen({
       const total = play.mainCount;
       const bonus = play.foundBonus.size;
       recordDailyResult(daily.dateKey, daily.yesterdayKey, { stars, found: total, total, bonus }, reward);
+      // best-effort cloud submission for the leaderboard (no-op when offline)
+      void submitDailyResult({ date: daily.dateKey, stars, found: total, total, bonus });
       payload = {
         stars,
         coins: play.earned + reward,

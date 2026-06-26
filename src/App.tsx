@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './state/gameStore';
+import { initCloud } from './state/cloudSync';
 import { getLevel, LEVEL_COUNT } from './engine/levels';
 import { type DailyInfo } from './engine/daily';
 import { sfx } from './engine/audio';
@@ -24,6 +25,11 @@ export default function App() {
   useEffect(() => {
     sfx.setMuted(!soundOn);
   }, [soundOn]);
+
+  // optional cloud save / sync (no-op when not configured)
+  useEffect(() => {
+    void initCloud();
+  }, []);
 
   const pickLevel = (n: number) => {
     setPlayMode('campaign');

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from '../state/gameStore';
 import { dateKeyOf, friendlyDate, getDailyInfo, type DailyInfo } from '../engine/daily';
 import { buildDailyShare, shareText } from '../lib/share';
+import { fetchLeaderboard, type LeaderboardRow } from '../state/cloudSync';
+import { isCloudEnabled } from '../lib/supabase';
 import { sfx } from '../engine/audio';
 import Toast, { type ToastData } from '../components/Toast';
 
@@ -21,6 +23,7 @@ export default function DailyScreen({ onPlay, onBack }: Props) {
 
   const [info, setInfo] = useState<DailyInfo | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   useEffect(() => {
@@ -28,9 +31,13 @@ export default function DailyScreen({ onPlay, onBack }: Props) {
     getDailyInfo(new Date())
       .then((i) => alive && setInfo(i))
       .catch(() => alive && setLoadFailed(true));
+    if (isCloudEnabled()) {
+      fetchLeaderboard(todayKey).then((rows) => alive && setBoard(rows));
+    }
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const flash = (text: string, kind: ToastData['kind']) => {
@@ -134,6 +141,27 @@ export default function DailyScreen({ onPlay, onBack }: Props) {
               </button>
             </div>
           </>
+        )}
+
+        {board && board.length > 0 && (
+          <div style={{ width: '100%', maxWidth: 340, marginTop: 22 }}>
+            <p className="hud__sub" style={{ marginBottom: 8 }}>
+              Today’s Leaderboard
+            </p>
+            <div className="settings" style={{ gap: 6 }}>
+              {board.slice(0, 6).map((row, i) => (
+                <div className="settings__row" key={i} style={{ padding: '10px 14px' }}>
+                  <span>
+                    <b style={{ color: 'var(--primary-deep)' }}>#{row.rank}</b> &nbsp;{row.display_name}
+                  </span>
+                  <span style={{ color: 'var(--accent-deep)' }}>
+                    {'★'.repeat(row.stars)}
+                    {row.bonus > 0 ? ` +${row.bonus}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
